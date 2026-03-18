@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     # Polling: give up after this many seconds (Boce recommends 2 minutes)
     BOCE_POLL_TIMEOUT_SECONDS: float = 120.0
 
+    # Redis Configuration (for ARQ task queue)
+    REDIS_URL: str = "redis://localhost:6379"
+
+    # Database Configuration
+    DATABASE_NAME: str = "boce_api.db"
+
+    # Concurrency Throttling (Internal)
+    MAX_CONCURRENT_TASKS: int = 20
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

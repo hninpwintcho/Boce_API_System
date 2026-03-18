@@ -1,11 +1,30 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
-*.pyo
-.env
-.venv/
+*.py[cod]
+*$py.class
+
+# Databases
+*.db
+*.sqlite3
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Virtual Environment
 venv/
-dist/
-build/
-*.egg-info/
-.pytest_cache/
-htmlcov/
+.venv/
+env/
+.env
+
+# Project specific
+test_balance.py
+test_create_task.py
+bootstrap_phase3.py
+setup_keys.py
+check_db.py
+tests/test_phase3_auth.py
+
+# Artifacts & Gemini garbage
+.gemini/
+.antigravityignore

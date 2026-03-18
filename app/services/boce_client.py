@@ -109,13 +109,13 @@ async def detect_url(url: str) -> BoceResultResponse:
     """
     if not settings.BOCE_API_KEY:
         logger.info("BOCE_API_KEY not set — using built-in mock response.")
-        return _build_mock(url)
+        return build_mock_results(url)
 
-    host = _extract_host(url)
+    host = extract_host(url)
     node_ids = settings.BOCE_NODE_IDS  # comma-separated string
 
-    task_id = await _create_task(host, node_ids)
-    return await _poll_result(task_id)
+    task_id = await create_boce_task(host, node_ids)
+    return await poll_boce_result(task_id)
 
 
 async def fetch_node_list() -> dict[int, str]:
@@ -147,7 +147,7 @@ async def fetch_node_list() -> dict[int, str]:
 
 # ─── Step 1: create task ──────────────────────────────────────────────────────
 
-async def _create_task(host: str, node_ids: str) -> str:
+async def create_boce_task(host: str, node_ids: str) -> str:
     """
     Call POST /v3/task/create/curl and return the task ID string.
     node_ids is a comma-separated string like "6,31,32".
@@ -193,7 +193,7 @@ async def _create_task(host: str, node_ids: str) -> str:
 
 # ─── Step 2: poll until done ──────────────────────────────────────────────────
 
-async def _poll_result(task_id: str) -> BoceResultResponse:
+async def poll_boce_result(task_id: str) -> BoceResultResponse:
     """
     Poll GET /v3/task/curl/{task_id} every BOCE_POLL_INTERVAL_SECONDS
     until done==true or BOCE_POLL_TIMEOUT_SECONDS elapses.
@@ -257,7 +257,7 @@ def _parse_result(body: dict) -> BoceResultResponse:
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def _extract_host(url: str) -> str:
+def extract_host(url: str) -> str:
     """Extract bare hostname (+ path) from a full URL for Boce's 'host' param."""
     parsed = urlparse(url)
     # Boce expects the host without scheme but with path, e.g. "example.com/api/v1/ping"
@@ -267,7 +267,7 @@ def _extract_host(url: str) -> str:
     return host
 
 
-def _build_mock(url: str) -> BoceResultResponse:
+def build_mock_results(url: str) -> BoceResultResponse:
     host = _extract_host(url)
     regions = []
     for r in _MOCK_REGIONS:

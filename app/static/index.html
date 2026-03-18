@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boce Unified Proxy | Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="glass-container">
+        <header>
+            <h1>Unified Detection Proxy</h1>
+            <div class="balance-card">
+                <span class="label">Current Balance</span>
+                <span id="balance-value">Loading...</span>
+            </div>
+        </header>
+
+        <section class="stats-grid">
+            <div class="stat-card">
+                <h3>Global Availability</h3>
+                <div class="value" id="global-avg">--%</div>
+            </div>
+            <div class="stat-card">
+                <h3>Active Tasks</h3>
+                <div class="value" id="active-tasks">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Audited</h3>
+                <div class="value" id="total-audited">0</div>
+            </div>
+        </section>
+
+        <main>
+            <div class="controls">
+                <h2>Audit History (Traceability)</h2>
+                <button onclick="refreshData()" class="btn-refresh">Refresh Data</button>
+            </div>
+            <div class="table-container">
+                <table id="history-table">
+                    <thead>
+                        <tr>
+                            <th>Task ID</th>
+                            <th>URL</th>
+                            <th>Provider</th>
+                            <th>Status</th>
+                            <th>Availability</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-body">
+                        <!-- Data injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

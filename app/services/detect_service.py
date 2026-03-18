@@ -41,7 +41,7 @@ async def run_detection(
     """
     raw: BoceResultResponse = await boce_client.detect_url(url)
 
-    regions = _normalize_regions(raw, ip_whitelist)
+    regions = normalize_regions(raw, ip_whitelist)
     summary = build_summary(regions)
     anomaly_list = build_anomaly_list(regions)
 
@@ -54,7 +54,7 @@ async def run_detection(
     )
 
 
-def _normalize_regions(
+def normalize_regions(
     raw: BoceResultResponse,
     ip_whitelist: Optional[List[str]],
 ) -> List[RegionResult]:
