@@ -23,6 +23,10 @@ This project evolved through four critical phases, each adding layers of reliabi
 **✅ Verification**:
 - Run `python tests/verify_1_to_3.py` (Checks health, basic auth, and task creation).
 - Check Swagger Docs at `http://localhost:3000/docs`.
+- <img width="1832" height="933" alt="image" src="https://github.com/user-attachments/assets/dda80539-a894-48c7-b60e-619a0d5b1744" />
+<img width="1608" height="1072" alt="image" src="https://github.com/user-attachments/assets/57b35085-95af-488c-b222-e6e3e3de3637" />
+
+
 
 ---
 
