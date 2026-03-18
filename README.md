@@ -2,43 +2,74 @@
 
 Welcome to the **Unified Detection Proxy Layer**. This project is a world-class, autonomous monitoring platform that bridges the gap between raw detection APIs and high-scale enterprise requirements.
 
-## 🚀 The Journey: From DevOps to Architect
-This project evolved through four critical phases to reach its current state of **Intelligent Automation**.
+## 🚀 The Journey: Step-by-Step Implementation
+
+This project evolved through four critical phases, each adding layers of reliability, security, and intelligence.
 
 ---
 
-## 🏗️ Phase 1: The Foundation (Minimal Viable Product)
-**Goal**: Core connectivity and normalization.
-- **Boce API Integration**: Built a robust `boce_client` that handles task creation, node selection, and polling.
-- **Data Normalization**: Transformed Boce's raw, complex JSON into a clean, internal `RegionResult` schema with 100% type safety.
-- **URL Sanitization**: Implemented strict validation to ensure only valid URLs are processed, preventing upstream API errors.
-- **Basic Persistence**: Initial database schema for tracking task completion.
+### 🏗️ Phase 1: The Foundation (MVP)
+**Objective**: Establish core connectivity and basic data normalization.
 
-## 🛡️ Phase 2: Production Robustness & "Point-Safe" Recovery
-**Goal**: Zero-waste cost safety and high-scale reliability.
-- **Multi-Provider Architecture ("The Slot")**: Designed a generic "Provider Slot" system. While it defaults to Boce, the logic is decoupled to support any provider (ITdog, IPIP) without a core rewrite.
-- **Zero-Point-Wastage**: Implemented **Atomic Persistence**. The Boce Task ID is saved to the database *immediately* after creation. 
-- **Recovery Manager**: Built a startup daemon that scans for "Zombie" (interrupted) tasks. If the server crashes, it resumes polling on restart instead of wasting points on a new task. ✅
-- **Traceability**: Comprehensive audit logs for every request.
+1. **Setup Environment**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. **Configure API**: Update `.env` with your `BOCE_API_KEY`.
+3. **Run Initial Checks**:
+   ```bash
+   python check_db.py
+   ```
+**✅ Verification**:
+- Run `python tests/verify_1_to_3.py` (Checks health, basic auth, and task creation).
+- Check Swagger Docs at `http://localhost:3000/docs`.
 
-## 💎 Phase 3: Security, Quotas & Visualization
-**Goal**: Governance and a professional "Single Pane of Glass" view.
-- **API Key Security**: Implemented a custom middleware for `X-API-KEY` enforcement. No anonymous access is allowed.
-- **Spending Quotas (Point Protection)**: Every API Key is assigned a `daily_quota`. This prevents "Agent Overkill" or accidental budget burn. The system blocks requests once the limit is reached. ✅
-- **Premium Glassmorphic Dashboard**: 
-  - **Real-time Metrics**: Live view of Boce balance, total tasks, and global availability.
-  - **History Explorer**: A searchable audit table for every domain checked.
-  - **Premium UI**: Crafted with vanilla CSS for maximum performance and a modern "Glassmorphism" aesthetic.
+---
 
-## 🧠 Phase 4: Intelligent Platform (AI Monitoring & Failover)
-**Goal**: Autonomous decision-making and smart alerting.
-- **AI Anomaly Detection (Level 9)**: The system now identifies **"Silent Failures"** that look successful but are actually broken (e.g., 200 OK with 0ms latency).
-- **Latency Outlier Detection**: Automatically flags response times that deviate 5x from the batch average, signaling localized network issues. ✅
-- **Autonomous Auto-Failover (Level 10-11)**:
-  - **Health Scorer**: Monitors the success rate of providers in real-time.
-  - **Failover Logic**: If the primary provider (Boce) degrades, the system automatically redirects traffic to a secondary provider slot (Mock Backup) without human intervention.
-- **Smart Alerting (Level 12)**:
-  - **Platform-Level Alerts**: Integrated an `AlertService` that pushes high-priority alerts to webhooks when critical failovers or point-shortages occur. ✅
+### 🛡️ Phase 2: Robustness & Point-Safe Recovery
+**Objective**: Ensure zero-waste point management and system resilience.
+
+1. **Initialize Database**: The system automatically runs `init_db` on startup.
+2. **Test Recovery Manager**: 
+   - Start a task, then kill the server.
+   - Restart the server; check logs to see tasks being resumed automatically.
+3. **Verify Atomic Persistence**: Every task creation is logged to `boce_api.db` before external calls.
+
+**✅ Verification**:
+- Run `python -m tests.verify_7_recovery` to simulate a crash and recovery scenario.
+
+---
+
+### 💎 Phase 3: Governance & Visualization
+**Objective**: Secure the API and provide a high-end management dashboard.
+
+1. **Setup Admin Keys**: 
+   ```bash
+   python setup_keys.py
+   ```
+2. **Access Dashboard**: Open `http://localhost:3000/dashboard` in your browser.
+3. **Authenticate**: Use the generated key (e.g., `sk-test-points-safe-12345`) when prompted.
+
+**✅ Verification**:
+- Run `pytest tests/test_phase3_auth.py` to confirm `X-API-KEY` enforcement.
+- Verify real-time balance updates on the dashboard.
+
+---
+
+### 🧠 Phase 4: Intelligence & Auto-Failover
+**Objective**: Autonomous monitoring and smart alerting.
+
+1. **Test AI Monitoring**: 
+   - The system automatically detects "Silent Failures" and latency outliers.
+2. **Configure Alerts**: Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
+3. **Trigger Test Alert**:
+   - Access `GET http://localhost:3000/api/admin/alert/test` (requires API Key).
+4. **Simulate Failover**:
+   - The system monitors provider health and switches to backups if success rates drop.
+
+**✅ Verification**:
+- Run `python -m tests.test_phase4_final` to verify anomaly detection and auto-failover logic.
+- Run `pytest tests/test_boss_features.py` for a full suite of final checks.
 
 ---
 
