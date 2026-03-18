@@ -109,7 +109,7 @@ async def detect_batch(
             await db.execute("UPDATE api_keys SET used_today = used_today + 1 WHERE id = ?", (user["id"],))
             
             task_ids.append(task_id)
-            background_tasks.add_task(run_detection_bg, task_id, str(url), provider=provider)
+            background_tasks.add_task(run_detection_bg, task_id, str(url), provider=provider, batch_id=batch_id)
         await db.commit()
 
     return JSONResponse(

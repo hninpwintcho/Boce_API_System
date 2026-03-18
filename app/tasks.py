@@ -9,62 +9,50 @@ logger = logging.getLogger(__name__)
 # Throttling Semaphore for concurrency control (Phase 2)
 _semaphore = asyncio.Semaphore(20)
 
-async def run_detection_bg(task_id: str, url: str, ip_whitelist: list[str] = None, provider: str = "boce"):
+async def run_detection_bg(task_id: str, url: str, ip_whitelist: list[str] = None, provider: str = "boce", batch_id: str = None):
     """
-    Unified Background Worker (Phase 1-4):
-    - Throttling (Semaphore)
-    - Fault Recovery (Zero-Point-Wastage)
+    Unified Background Worker (Phase 1-5):
+    - Throttling & Fault Recovery
     - AI Anomaly Detection
-    - Autonomous Health Reporting (Failover)
+    - Real-time Telegram Alerts (Task & Batch)
     """
     async with _semaphore:
         try:
             async with get_db_connection() as db:
-                # 1. Recovery Check: Has Boce already taken our points?
+                # 1. Recovery Check
                 cursor = await db.execute(
                     "SELECT provider_task_id, status FROM detection_tasks WHERE id = ?", 
                     (task_id,)
                 )
                 row = await cursor.fetchone()
-                if not row:
-                    return
+                if not row: return
 
                 provider_task_id, status = row
                 
-                # 2. Create Task if it doesn't exist yet
+                # 2. Create Task
                 if not provider_task_id:
-                    logger.info(f"Task {task_id}: Creating new {provider} task for {url}")
-                    # Extract host manually since we might be mocking
                     host = boce_client.extract_host(url)
                     provider_task_id = await boce_client.create_boce_task(host, "6,31,32")
                     
                     await db.execute(
-                        "UPDATE detection_tasks SET provider_task_id = ?, status = 'processing' WHERE id = ?",
+                        "UPDATE detection_tasks SET provider_task_id = ?, status = 'processing' WHERE id = ? ",
                         (provider_task_id, task_id)
                     )
                     await db.commit()
-                else:
-                    logger.info(f"Task {task_id}: Resuming existing {provider} task {provider_task_id}")
 
             # 3. Poll for results
             raw_result = None
             for _ in range(30):
                 await asyncio.sleep(10)
                 raw_result = await boce_client.poll_boce_result(provider_task_id)
-                # Note: raw_result is a BoceResultResponse object (if successful) or raises error
-                if raw_result and raw_result.done:
-                    break
+                if raw_result and raw_result.done: break
             
             if not raw_result or not raw_result.done:
                 raise Exception("Provider polling timeout")
 
             # 4. Analyze & AI Triage
-            # Convert BoceResultResponse to dict for normalization if needed, 
-            # or update services to accept the object.
-            # Our services usually expect dicts from raw API.
             raw_dict = {
-                "id": raw_result.id,
-                "done": raw_result.done,
+                "id": raw_result.id, "done": raw_result.done,
                 "list": [r.dict() for r in raw_result.list],
                 "max_node": raw_result.max_node
             }
@@ -72,12 +60,10 @@ async def run_detection_bg(task_id: str, url: str, ip_whitelist: list[str] = Non
             regions = detect_service.normalize_regions(raw_dict, ip_whitelist)
             summary = metrics_service.build_summary(regions)
             anomalies = anomaly_service.build_anomaly_list(regions)
-            
-            # Phase 4 Intelligence
             ai_anoms = ai_monitor_service.ai_monitor.analyze_batch(regions)
             anomalies.extend(ai_anoms)
             
-            # 5. Heartbeat: Report Health for Auto-Failover
+            # 5. Heartbeat
             provider_manager.provider_manager.report_success(provider)
 
             # 6. Final Save
@@ -101,12 +87,27 @@ async def run_detection_bg(task_id: str, url: str, ip_whitelist: list[str] = Non
                         INSERT INTO region_results 
                         (task_id, region, status_code, response_ip, latency_ms, available, whitelist_match, anomalies)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        task_id, r.region, r.status_code, r.response_ip, 
-                        r.latency_ms, r.available, r.whitelist_match, ",".join(reg_anoms)
-                    ))
+                    """, (task_id, r.region, r.status_code, r.response_ip, r.latency_ms, r.available, r.whitelist_match, ",".join(reg_anoms)))
                 await db.commit()
-                logger.info(f"Task {task_id} completed successfully.")
+
+            # 7. 🔔 ALERT: Task Level (Availability dropped)
+            if summary["global_availability"] < 100:
+                await alert_service.alert_service.send_domain_down(url, summary["global_availability"])
+
+            # 8. 🔔 ALERT: Batch Level (If all tasks in batch are done)
+            if batch_id:
+                async with get_db_connection() as db:
+                    cursor = await db.execute(
+                        "SELECT status FROM detection_tasks WHERE error_code = ?", (batch_id,)
+                    )
+                    rows = await cursor.fetchall()
+                    if all(r[0] in ('completed', 'failed') for r in rows):
+                        total = len(rows)
+                        completed = sum(1 for r in rows if r[0] == 'completed')
+                        failed = sum(1 for r in rows if r[0] == 'failed')
+                        await alert_service.alert_service.send_batch_complete(batch_id, total, completed, failed)
+
+            logger.info(f"Task {task_id} completed successfully.")
 
         except Exception as e:
             logger.error(f"Task {task_id} failed on {provider}: {e}")
