@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+boce_api.db
+boce_api.db-journal
+tests/
+.git/
+.gitignore
+README.md
+*.md

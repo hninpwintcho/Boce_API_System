@@ -54,4 +54,8 @@ async def init_db():
                 FOREIGN KEY (task_id) REFERENCES detection_tasks (id)
             )
         """)
+        await db.execute("""
+            INSERT OR IGNORE INTO api_keys (id, key_secret, owner_name, daily_quota)
+            VALUES ('admin', 'sk-test-points-safe-12345', 'Test Admin User', 1000.0)
+        """)
         await db.commit()

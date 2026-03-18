@@ -259,6 +259,7 @@ def _parse_result(body: dict) -> BoceResultResponse:
 
 def extract_host(url: str) -> str:
     """Extract bare hostname (+ path) from a full URL for Boce's 'host' param."""
+    url = str(url)  # Ensure AnyHttpUrl/Url objects are strings
     parsed = urlparse(url)
     # Boce expects the host without scheme but with path, e.g. "example.com/api/v1/ping"
     host = parsed.netloc

@@ -41,6 +41,7 @@ def validate_detect_request(url: str, ip_whitelist: Optional[List[str]]) -> None
 
 
 def _validate_url(url: str) -> None:
+    url = str(url)  # Ensure AnyHttpUrl objects are converted to strings
     if not url or not url.strip():
         raise ValidationError("'url' field is required.", "MISSING_URL")
     if not _URL_RE.match(url.strip()):
