@@ -77,6 +77,41 @@ This project evolved through four critical phases, each adding layers of reliabi
 
 ---
 
+## 🔍 Manual Verification
+While automated tests are recommended, you can verify core functionality manually:
+
+### 1. Dashboard Accessibility
+- Open your browser and navigate to: `http://localhost:3000/dashboard`
+- Confirm that the glassmorphic UI loads and prompts for an `X-API-KEY`.
+
+### 2. API Authentication (via cURL)
+Test the detection endpoint manually to verify key enforcement:
+
+**Unauthorized Request**:
+```bash
+curl -X POST http://localhost:3000/api/detect \
+     -H "Content-Type: application/json" \
+     -d '{"url": "https://example.com"}'
+```
+*(Expected: `403 Forbidden`)*
+
+**Authorized Request**:
+```bash
+curl -X POST http://localhost:3000/api/detect \
+     -H "X-API-KEY: sk-test-points-safe-12345" \
+     -H "Content-Type: application/json" \
+     -d '{"url": "https://example.com"}'
+```
+*(Expected: `202 Accepted` with a `task_id`)*
+
+### 3. Check Task Status
+```bash
+curl -H "X-API-KEY: sk-test-points-safe-12345" \
+     http://localhost:3000/api/detect/<TASK_ID>
+```
+
+---
+
 ## 🛠️ Technology Stack
 - **Framework**: FastAPI (Asynchronous Python)
 - **Database**: SQLite with `aiosqlite` for non-blocking I/O.
