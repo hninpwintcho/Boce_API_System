@@ -3,10 +3,27 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.database import get_db_connection
+from app.services.alert_service import alert_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+@router.get("/alert/test", summary="Test Telegram alert")
+async def test_telegram():
+    """Send a test message to Telegram to verify the bot is configured correctly."""
+    if not alert_service.telegram_enabled:
+        return {"success": False, "message": "Telegram not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env"}
+    
+    result = await alert_service.send_telegram(
+        "✅ *Boce Proxy Test Alert*\n\n"
+        "Your Telegram integration is working!\n"
+        "You will receive alerts for:\n"
+        "• Batch completion\n"
+        "• Low balance warnings\n"
+        "• Domain down alerts"
+    )
+    return {"success": result, "message": "Test alert sent!" if result else "Failed to send alert."}
 
 class KeyCreateRequest(BaseModel):
     owner_name: str
