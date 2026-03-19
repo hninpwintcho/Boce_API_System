@@ -15,10 +15,10 @@ async def get_user_stats(user: dict = Depends(get_authorized_user)):
     Returns aggregated metrics for the current business key.
     """
     async with get_db_connection() as db:
-        # Total tasks
+        # Total tasks from the new batch system
         cursor = await db.execute(
-            "SELECT count(*), sum(case when status='completed' then 1 else 0 end), sum(case when status='failed' then 1 else 0 end), sum(case when status='processing' then 1 else 0 end) FROM detection_tasks WHERE api_key_id = ?",
-            (user["id"],)
+            "SELECT count(*), sum(case when status='completed' then 1 else 0 end), sum(case when status='failed' then 1 else 0 end), sum(case when status='processing' then 1 else 0 end) FROM scan_batch_items WHERE tenant_id = ?",
+            (user["tenant_id"],)
         )
         total, completed, failed, processing = await cursor.fetchone()
         

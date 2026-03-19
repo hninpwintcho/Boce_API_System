@@ -69,6 +69,7 @@ class DetectionResult(BaseModel):
     summary: DetectionSummary
     regions: List[RegionResult]
     anomaly_list: List[AnomalyItem]
+    dns_context: Optional[dict] = None
 
 
 # ─── API request / error schemas ──────────────────────────────────────────────
@@ -86,6 +87,31 @@ class BatchDetectRequest(BaseModel):
     ip_whitelist: Optional[List[str]] = None
     provider: str = "boce"
     priority: int = 10
+    webhook_url: Optional[str] = None
+
+
+class DNSRecord(BaseModel):
+    name: str
+    type: str  # A, CNAME, etc.
+    value: str
+    line: str = "default"
+    ttl: int = 600
+
+
+class DNSRecordCreate(BaseModel):
+    domain: str
+    records: List[DNSRecord]
+
+
+class DNSRecordUpdate(BaseModel):
+    value: str
+    line: Optional[str] = None
+    ttl: Optional[int] = None
+
+
+class CertCheckRequest(BaseModel):
+    domains: List[str]
+    priority: int = 20
     webhook_url: Optional[str] = None
 
 

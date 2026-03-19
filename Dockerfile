@@ -1,29 +1,28 @@
-# 🐍 Production Dockerfile for Boce Unified Proxy
-FROM python:3.11-slim
+# Use Python 3.10 slim for a small, secure base
+FROM python:3.10-slim
 
-# 🛡️ 1. Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PORT=3000
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
-# 📁 2. Set working directory
+# Set working directory
 WORKDIR /app
 
-# ⚙️ 3. Install system dependencies (SQLite + curl for healthchecks)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
-# 📦 4. Install Python dependencies
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 📂 5. Copy project files
+# Copy project files
 COPY . .
 
-# 🚢 6. Expose the API port
+# Expose API port
 EXPOSE 3000
 
-# 🚀 7. Launch the app with Uvicorn
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "3000"]
+# Default command (will be overridden in compose)
+CMD ["python", "-m", "app.cli", "api"]

@@ -24,6 +24,7 @@ from app.models.schemas import (
 from app.services.metrics_service import build_summary
 from app.services.anomaly_service import build_anomaly_list
 from app.services import boce_client
+from app.services.dns_center_service import dns_center_service
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +46,18 @@ async def run_detection(
     summary = build_summary(regions)
     anomaly_list = build_anomaly_list(regions)
 
+    # DNS Content Enrichment (Phase 6)
+    from urllib.parse import urlparse
+    domain = urlparse(url).netloc
+    dns_context = await dns_center_service.query_dns(domain)
+
     return DetectionResult(
         success=True,
         url=url,
         summary=summary,
         regions=regions,
         anomaly_list=anomaly_list,
+        dns_context=dns_context,
     )
 
 

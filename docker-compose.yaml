@@ -3,22 +3,35 @@ version: '3.8'
 services:
   api:
     build: .
-    container_name: boce-api-v4
+    container_name: boce-api-v5
+    command: python -m app.cli api
     ports:
       - "3000:3000"
     volumes:
       - ./boce_api.db:/app/boce_api.db
       - ./.env:/app/.env
     restart: unless-stopped
-    # Business Level: Healthchecks ensure auto-recovery
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/stats/admin/stats || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-    # Standard output logs for easier maintenance
     environment:
       - PORT=3000
+      - PYTHONUNBUFFERED=1
+      - BOCE_FORCE_MOCK=true
+
+  scheduler:
+    build: .
+    container_name: boce-scheduler-v5
+    command: python -m app.cli scheduler
+    volumes:
+      - ./boce_api.db:/app/boce_api.db
+      - ./.env:/app/.env
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
       - PYTHONUNBUFFERED=1
       - BOCE_FORCE_MOCK=true
 

@@ -11,152 +11,133 @@ _semaphore = asyncio.Semaphore(20)
 
 async def start_priority_scheduler():
     """
-    Enterprise-Grade Priority Scheduler (v3)
-    - Non-blocking: Handles 5000+ domains without delaying urgent ones.
-    - Priority-Aware: Fetches tasks with highest weight/priority first.
+    Platform-Grade Priority Scheduler (Step 5/7 Suggestion)
+    - Fetches from scan_batch_items
+    - Priority-Aware (Higher priority first)
     """
-    logger.info("🚀 Priority Scheduler started.")
+    logger.info("🚀 Platform Scheduler started.")
     while True:
         try:
             async with get_db_connection() as db:
-                # Find pending tasks ordered by priority
-                cursor = await db.execute(
-                    "SELECT id, url, provider, error_code, webhook_url FROM detection_tasks WHERE status = 'pending' ORDER BY priority DESC, created_at ASC LIMIT 10"
-                )
-                tasks = await cursor.fetchall()
+                # 1. Fetch pending items across all batches
+                cursor = await db.execute("""
+                    SELECT i.id, i.domain, i.batch_id, i.tenant_id, b.source_type
+                    FROM scan_batch_items i
+                    JOIN scan_batches b ON i.batch_id = b.id
+                    WHERE i.status = 'pending' 
+                    ORDER BY i.priority DESC, i.created_at ASC 
+                    LIMIT 20
+                """)
+                items = await cursor.fetchall()
                 
-            for tid, url, prov, batch_id, webhook in tasks:
-                # Trigger background worker (respecting semaphore internally)
-                asyncio.create_task(run_detection_bg(tid, url, provider=prov, batch_id=batch_id, webhook_url=webhook))
-
+            for iid, domain, bid, tid, source in items:
                 # Mark as processing immediately to avoid double-pick
                 async with get_db_connection() as db:
-                    await db.execute("UPDATE detection_tasks SET status = 'processing' WHERE id = ?", (tid,))
+                    await db.execute("UPDATE scan_batch_items SET status = 'processing', started_at = ? WHERE id = ?", (datetime.now().isoformat(), iid))
+                    # Also update batch started_at if not set
+                    await db.execute("UPDATE scan_batches SET started_at = ?, status = 'processing' WHERE id = ? AND started_at IS NULL", (datetime.now().isoformat(), bid))
                     await db.commit()
+
+                # Trigger background worker
+                asyncio.create_task(run_batch_item_worker(iid, domain, bid, tid))
             
-            await asyncio.sleep(2) # Poll every 2 seconds
+            await asyncio.sleep(2) 
         except Exception as e:
             logger.error(f"Scheduler Error: {e}")
             await asyncio.sleep(5)
 
-async def run_detection_bg(task_id: str, url: str, ip_whitelist: list[str] = None, provider: str = "boce", batch_id: str = None, webhook_url: str = None):
-    """
-    Unified Background Worker (Phase 1-5):
-    - Throttling & Fault Recovery
-    - AI Anomaly Detection
-    """
+async def run_batch_item_worker(item_id: str, domain: str, batch_id: str, tenant_id: str):
+    """Refined Worker (Phase 8: Multiplexed Task Handler)"""
     async with _semaphore:
         try:
             async with get_db_connection() as db:
-                # 1. Recovery Check
-                cursor = await db.execute(
-                    "SELECT provider_task_id, status FROM detection_tasks WHERE id = ?", 
-                    (task_id,)
-                )
-                row = await cursor.fetchone()
-                if not row: return
+                cursor = await db.execute("SELECT batch_type FROM scan_batches WHERE id = ?", (batch_id,))
+                batch_type = (await cursor.fetchone())[0]
 
-                provider_task_id, status = row
-                
-                # 2. Create Task
-                if not provider_task_id:
-                    host = boce_client.extract_host(url)
-                    provider_task_id = await boce_client.create_boce_task(host, "6,31,32")
-                    
-                    await db.execute(
-                        "UPDATE detection_tasks SET provider_task_id = ?, status = 'processing' WHERE id = ? ",
-                        (provider_task_id, task_id)
-                    )
+            import json
+            summary_data = {}
+
+            if batch_type == "detection":
+                # Original BOCE Logic
+                provider_task_id = await boce_client.create_boce_task(domain, "6,31,32")
+                async with get_db_connection() as db:
+                    await db.execute("UPDATE scan_batch_items SET provider_task_id = ? WHERE id = ?", (provider_task_id, item_id))
                     await db.commit()
 
-            # 3. Poll for results
-            raw_result = None
-            for _ in range(30):
-                await asyncio.sleep(10)
-                raw_result = await boce_client.poll_boce_result(provider_task_id)
-                if raw_result and raw_result.done: break
-            
-            if not raw_result or not raw_result.done:
-                raise Exception("Provider polling timeout")
+                raw_result = None
+                for _ in range(30):
+                    await asyncio.sleep(10)
+                    raw_result = await boce_client.poll_boce_result(provider_task_id)
+                    if raw_result and raw_result.done: break
+                
+                if not raw_result or not raw_result.done:
+                    raise Exception("Provider polling timeout")
 
-            # 4. Analyze & AI Triage
-            if settings.BOCE_FORCE_MOCK:
-                # Simulate a delay and then fake success for demo purposes
-                await asyncio.sleep(3)
-                summary = {"total_checked": 3, "total_available": 3, "global_availability": 100.0}
-                regions = [] # Mocked region data
-                anomalies = []
-            else:
-                raw_dict = {
-                    "id": raw_result.id, "done": raw_result.done,
-                    "list": [r.dict() for r in raw_result.list],
-                    "max_node": raw_result.max_node
-                }
-
-                regions = detect_service.normalize_regions(raw_dict, ip_whitelist)
+                from app.services import detect_service, metrics_service
+                regions = detect_service.normalize_regions(raw_result, None)
                 summary = metrics_service.build_summary(regions)
-                anomalies = anomaly_service.build_anomaly_list(regions)
-            ai_anoms = ai_monitor_service.ai_monitor.analyze_batch(regions)
-            anomalies.extend(ai_anoms)
+                summary_data = summary.dict()
             
-            # 5. Heartbeat
-            provider_manager.provider_manager.report_success(provider)
+            elif batch_type == "cert":
+                # New Certificate Logic
+                from app.services.cert_service import cert_service
+                cert_info = await cert_service.get_cert_info(domain)
+                if not cert_info:
+                    raise Exception("Certificate fetch returned no data")
+                summary_data = cert_info
 
-            # 6. Final Save
+            # Final Save Item & Update Batch
             async with get_db_connection() as db:
                 await db.execute("""
-                    UPDATE detection_tasks SET 
-                        status = 'completed', completed_at = ?, 
-                        regions_checked = ?, regions_available = ?, 
-                        global_availability_percent = ?, anomaly_count = ?
+                    UPDATE scan_batch_items SET 
+                        status = 'success', completed_at = ?, 
+                        result_summary = ?
                     WHERE id = ?
-                """, (
-                    datetime.now().isoformat(),
-                    summary["total_checked"], summary["total_available"],
-                    summary["global_availability"], len(anomalies),
-                    task_id
-                ))
+                """, (datetime.now().isoformat(), json.dumps(summary_data), item_id))
                 
-                for r in regions:
-                    reg_anoms = [a.reason for a in anomalies if a.region == r.region]
-                    await db.execute("""
-                        INSERT INTO region_results 
-                        (task_id, region, status_code, response_ip, latency_ms, available, whitelist_match, anomalies)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (task_id, r.region, r.status_code, r.response_ip, r.latency_ms, r.available, r.whitelist_match, ",".join(reg_anoms)))
+                await db.execute("""
+                    UPDATE scan_batches SET 
+                        pending_items = pending_items - 1,
+                        success_items = success_items + 1
+                    WHERE id = ?
+                """, (batch_id,))
+                
+                # Check for completion and trigger webhook
+                cursor = await db.execute("SELECT pending_items, webhook_url, tenant_id, success_items, failed_items FROM scan_batches WHERE id = ?", (batch_id,))
+                row = await cursor.fetchone()
+                if row and row[0] == 0:
+                    await db.execute("UPDATE scan_batches SET status = 'completed', completed_at = ? WHERE id = ?", (datetime.now().isoformat(), batch_id))
+                    
+                    webhook_url = row[1]
+                    if webhook_url:
+                        from app.services.webhook_service import webhook_service
+                        payload = {
+                            "event": "batch.completed",
+                            "batch_id": batch_id,
+                            "batch_type": batch_type,
+                            "tenant_id": row[2],
+                            "summary": {
+                                "success": row[3],
+                                "failed": row[4],
+                                "total": row[3] + row[4]
+                            }
+                        }
+                        asyncio.create_task(webhook_service.send_webhook(webhook_url, payload, batch_id=batch_id))
+                    
                 await db.commit()
-
-            # 8. Batch Level tracking (Database only, alerting removed as requested)
-            # 5. Notify Webhook (Commercial Grade)
-            if webhook_url:
-                asyncio.create_task(webhook_service.send_webhook(webhook_url, {
-                    "task_id": task_id,
-                    "url": url,
-                    "status": "completed",
-                    "availability": summary.get("global_availability"),
-                    "anomalies": len(anomalies)
-                }))
-
-            await db.execute(
-                "UPDATE detection_tasks SET status = 'completed', global_availability_percent = ?, anomaly_count = ? WHERE id = ?",
-                (summary.get("global_availability", 0.0), len(anomalies), task_id)
-            )
-            await db.commit()
-            logger.info(f"✅ Task {task_id} completed. Webhook triggered if set.")
+            
+            logger.info(f"✅ Item {item_id} ({batch_type}) completed.")
 
         except Exception as e:
-            logger.error(f"❌ Worker Error for {task_id}: {e}")
-            provider_manager.provider_manager.report_failure(provider)
-            
+            logger.error(f"❌ Worker Error for {item_id}: {e}", exc_info=True)
             async with get_db_connection() as db:
-                await db.execute("UPDATE detection_tasks SET status = 'failed', error_code = ? WHERE id = ?", (str(e), task_id))
+                await db.execute("""
+                    UPDATE scan_batch_items SET status = 'failed', error_message = ?, completed_at = ? WHERE id = ?
+                """, (str(e), datetime.now().isoformat(), item_id))
+                await db.execute("""
+                    UPDATE scan_batches SET 
+                        pending_items = pending_items - 1,
+                        failed_items = failed_items + 1
+                    WHERE id = ?
+                """, (batch_id,))
                 await db.commit()
-            
-            # Notify failure to webhook too
-            if webhook_url:
-                asyncio.create_task(webhook_service.send_webhook(webhook_url, {
-                    "task_id": task_id,
-                    "url": url,
-                    "status": "failed",
-                    "error": str(e)
-                }))

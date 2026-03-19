@@ -22,6 +22,10 @@ class Settings(BaseSettings):
 
     # Polling: give up after this many seconds (Boce recommends 2 minutes)
     BOCE_POLL_TIMEOUT_SECONDS: float = 120.0
+    
+    # DNS Center API (Senior Integration)
+    DNS_CENTER_API_URL: str = "https://dns-center-api.openclaw.io/api"
+    DNS_CENTER_API_KEY: str = ""
 
     # Redis Configuration (for ARQ task queue)
     REDIS_URL: str = "redis://localhost:6379"

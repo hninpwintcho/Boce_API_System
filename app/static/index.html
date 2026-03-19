@@ -199,56 +199,155 @@
 
     <div class="container animate">
         <header class="header">
-            <h1>Detection Insights</h1>
-            <p>High-precision availability and anomaly tracking system.</p>
+            <h1>Platform Overview</h1>
+            <p>Unified Detection & DNS Management System.</p>
         </header>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="label">Total Tasks</div>
-                <div id="total-count" class="value">0</div>
+        <div style="margin-bottom: 2rem; display: flex; gap: 1rem;">
+            <button class="btn" id="btn-detect" onclick="showTab('detect')">Detection</button>
+            <button class="btn" id="btn-cert" style="background: #334155" onclick="showTab('cert')">Certificates</button>
+            <button class="btn" id="btn-dns" style="background: #334155" onclick="showTab('dns')">DNS Center</button>
+        </div>
+
+        <div id="detect-tab">
+            <!-- Quick Scan Card -->
+            <div class="main-card" style="margin-bottom: 2rem; background: rgba(99, 102, 241, 0.05); border: 1px dashed rgba(99, 102, 241, 0.3);">
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <div style="flex: 1;">
+                        <input type="text" id="scan-url" placeholder="Enter URL to scan (e.g. https://google.com)" 
+                               style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 0.75rem; border-radius: 0.5rem; outline: none; font-size: 1rem;">
+                    </div>
+                    <button class="btn" onclick="submitTask()">Start Detection</button>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="label">Currently Processing</div>
-                <div id="processing-count" class="value">0</div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="label">Total Tasks</div>
+                    <div id="total-count" class="value">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Currently Processing</div>
+                    <div id="processing-count" class="value">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Success Rate</div>
+                    <div id="health-pct" class="value">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Quota Used</div>
+                    <div id="quota-info" class="value">0 / 0</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="label">Success Rate</div>
-                <div id="health-pct" class="value">0%</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Quota Used</div>
-                <div id="quota-info" class="value">0 / 0</div>
+
+            <div class="main-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>Recent Task History</h2>
+                    <button class="btn" onclick="fetchHistory()">Refresh</button>
+                </div>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Target URL</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Availability</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-body">
+                            <!-- Loaded via JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <div class="main-card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2>Recent Task History</h2>
-                <button class="btn" onclick="fetchHistory()">Refresh</button>
+        <div id="cert-tab" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-card" style="border-left: 4px solid var(--danger)">
+                    <div class="label">Expired Certs</div>
+                    <div id="cert-expired" class="value" style="color: var(--danger)">0</div>
+                </div>
+                <div class="stat-card" style="border-left: 4px solid var(--warning)">
+                    <div class="label">Expiring < 7 Days</div>
+                    <div id="cert-critical" class="value" style="color: var(--warning)">0</div>
+                </div>
+                <div class="stat-card" style="border-left: 4px solid var(--primary)">
+                    <div class="label">Total Monitored</div>
+                    <div id="cert-total" class="value">0</div>
+                </div>
             </div>
-            
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Target URL</th>
-                            <th>Priority</th>
-                            <th>Status</th>
-                            <th>Date</th>
-                            <th>Availability</th>
-                        </tr>
-                    </thead>
-                    <tbody id="history-body">
-                        <!-- Loaded via JS -->
-                    </tbody>
-                </table>
+
+            <div class="main-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2>Certificate Expiry Tracking</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="cert-domain" placeholder="Enter domain to monitor" 
+                               style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 0.5rem; border-radius: 0.4rem; width: 250px;">
+                        <button class="btn" onclick="submitCertCheck()">Add & Audit</button>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Issuer</th>
+                                <th>Expiry Date</th>
+                                <th>Days Left</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cert-body">
+                            <tr><td colspan="5" style="text-align: center; color: var(--text-dim)">Start monitoring domains to see certificates</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="dns-tab" style="display: none;">
+            <div class="main-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2>Authoritative DNS Center</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="dns-domain" placeholder="Enter domain (e.g. aaxyd.cn)" 
+                               style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 0.5rem; border-radius: 0.4rem; width: 250px;">
+                        <button class="btn" onclick="lookupDNS()">Query Records</button>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Record Name</th>
+                                <th>Type</th>
+                                <th>Value</th>
+                                <th>Line</th>
+                                <th>TTL</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dns-body">
+                            <tr><td colspan="5" style="text-align: center; color: var(--text-dim)">Query a domain to see records</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
+        async function refreshDashboard() {
+            await fetchHistory();
+            await fetchCertStats();
+        }
+
         async function fetchHistory() {
             try {
                 // 1. Fetch Key-Isolated Stats
@@ -292,8 +391,128 @@
             }
         }
 
+        async function submitTask() {
+            const url = document.getElementById('scan-url').value.trim();
+            if (!url) return alert("Please enter a URL");
+            
+            try {
+                const resp = await fetch('/api/detect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-KEY': 'sk-test-points-safe-12345'
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                if (resp.status === 202 || resp.status === 200) {
+                    document.getElementById('scan-url').value = '';
+                    fetchHistory();
+                } else {
+                    const err = await resp.json().catch(() => ({}));
+                    alert("Error: " + (err.error || err.message || "Unknown error (" + resp.status + ")"));
+                }
+            } catch (err) {
+                console.error("Task submission failed:", err);
+            }
+        }
+
+        async function lookupDNS() {
+            const domain = document.getElementById('dns-domain').value.trim();
+            if (!domain) return alert("Please enter a domain");
+            
+            const body = document.getElementById('dns-body');
+            body.innerHTML = '<tr><td colspan="5" style="text-align: center;">Searching...</td></tr>';
+            
+            try {
+                const resp = await fetch(`/api/dns/query?domain=${domain}`, { headers: {'X-API-KEY': 'sk-test-points-safe-12345'} });
+                const data = await resp.json().catch(() => ({}));
+                body.innerHTML = '';
+                
+                if (resp.ok && data.records && data.records.length > 0) {
+                    data.records.forEach(rec => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${rec.name}</td>
+                            <td><span class="badge" style="background: rgba(168, 85, 247, 0.1); color: var(--secondary)">${rec.type}</span></td>
+                            <td style="font-family: monospace">${rec.value}</td>
+                            <td>${rec.line || 'default'}</td>
+                            <td>${rec.ttl}</td>
+                        `;
+                        body.appendChild(row);
+                    });
+                } else {
+                    body.innerHTML = '<tr><td colspan="5" style="text-align: center;">No records found.</td></tr>';
+                }
+            } catch (err) {
+                body.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger)">Failed to query DNS Center</td></tr>';
+            }
+        }
+
+        function showTab(tab) {
+            document.getElementById('detect-tab').style.display = tab === 'detect' ? 'block' : 'none';
+            document.getElementById('dns-tab').style.display = tab === 'dns' ? 'block' : 'none';
+            
+            document.getElementById('btn-detect').style.background = tab === 'detect' ? 'linear-gradient(135deg, var(--primary), var(--secondary))' : '#334155';
+            document.getElementById('btn-dns').style.background = tab === 'dns' ? 'linear-gradient(135deg, var(--primary), var(--secondary))' : '#334155';
+            document.getElementById('btn-cert').style.background = tab === 'cert' ? 'linear-gradient(135deg, var(--primary), var(--secondary))' : '#334155';
+        }
+
+        async function fetchCertStats() {
+            try {
+                const resp = await fetch('/api/certs/summary', { headers: {'X-API-KEY': 'sk-test-points-safe-12345'} });
+                const data = await resp.json();
+                
+                document.getElementById('cert-expired').textContent = data.metrics.expired;
+                document.getElementById('cert-critical').textContent = data.metrics.critical_7d;
+                document.getElementById('cert-total').textContent = data.metrics.total_monitored;
+
+                const listResp = await fetch('/api/certs/items?limit=50', { headers: {'X-API-KEY': 'sk-test-points-safe-12345'} });
+                const listData = await listResp.json();
+                const certBody = document.getElementById('cert-body');
+                certBody.innerHTML = '';
+                
+                if (listData.items && listData.items.length > 0) {
+                    listData.items.forEach(item => {
+                        const statusClass = item.days_remaining <= 0 ? 'status-failed' : (item.days_remaining < 7 ? 'status-pending' : 'status-success');
+                        const statusText = item.days_remaining <= 0 ? 'EXPIRED' : (item.days_remaining < 7 ? 'CRITICAL' : 'VALID');
+                        
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td><strong style="color: white">${item.domain}</strong></td>
+                            <td>${item.issuer}</td>
+                            <td>${item.expiry_date ? item.expiry_date.split('T')[0] : 'N/A'}</td>
+                            <td><span style="font-family: monospace; font-weight: bold">${item.days_remaining}d</span></td>
+                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        `;
+                        certBody.appendChild(row);
+                    });
+                } else {
+                    certBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-dim)">No certificate audits found.</td></tr>';
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function submitCertCheck() {
+            let domain = document.getElementById('cert-domain').value.trim();
+            if (!domain) return alert("Please enter a domain");
+            
+            try {
+                const resp = await fetch('/api/certs/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-API-KEY': 'sk-test-points-safe-12345' },
+                    body: JSON.stringify({ domains: [domain] })
+                });
+                if (resp.status === 202) {
+                    alert("Certificate audit queued!");
+                    document.getElementById('cert-domain').value = '';
+                    refreshDashboard();
+                }
+            } catch (err) { alert("Failed to queue cert check"); }
+        }
+
         // Initial load
-        window.onload = fetchHistory;
+        window.onload = refreshDashboard;
     </script>
 </body>
 </html>

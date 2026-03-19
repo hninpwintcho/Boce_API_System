@@ -12,10 +12,12 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db, get_db_connection
-from app.tasks import run_detection_bg, start_priority_scheduler
+from app.tasks import run_batch_item_worker, start_priority_scheduler
 from app.routes.detect import router as detect_router
 from app.routes.admin import router as admin_router
 from app.routes.stats import router as stats_router
+from app.routes.dns import router as dns_router
+from app.routes.certs import router as certs_router
 
 # Ensure static directory exists
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
@@ -36,16 +38,17 @@ async def lifespan(app: FastAPI):
         await asyncio.sleep(1) # Wait for server to be fully ready
         async with get_db_connection() as db:
             cursor = await db.execute(
-                "SELECT id, url, provider, status FROM detection_tasks WHERE status NOT IN ('completed', 'failed')"
+                "SELECT id, domain, batch_id, tenant_id FROM scan_batch_items WHERE status = 'processing'"
             )
             rows = await cursor.fetchall()
             for row in rows:
-                logger.info(f"🔄 Recovery: Resuming task {row[0]} on {row[2]}")
-                asyncio.create_task(run_detection_bg(row[0], row[1], provider=row[2]))
-        if rows: logger.info(f"✅ Recovery complete. Resumed {len(rows)} tasks.")
+                logger.info(f"🔄 Recovery: Resuming item {row[0]} in batch {row[2]}")
+                asyncio.create_task(run_batch_item_worker(row[0], row[1], row[2], row[3]))
+        if rows: logger.info(f"✅ Recovery complete. Resumed {len(rows)} items.")
 
     asyncio.create_task(resume_tasks())
-    asyncio.create_task(start_priority_scheduler())
+    # Scheduler is now a separate service (Phase 5)
+    # asyncio.create_task(start_priority_scheduler())
     
     yield
     
@@ -99,6 +102,8 @@ async def root_redirect(request: Request):
 app.include_router(detect_router, prefix="/api/detect", tags=["Detection"])
 app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
 app.include_router(stats_router, prefix="/api/stats", tags=["Stats"])
+app.include_router(dns_router, prefix="/api/dns", tags=["DNS Management"])
+app.include_router(certs_router, prefix="/api/certs", tags=["Certificates"])
 
 @app.get("/dashboard", include_in_schema=False)
 async def dashboard():

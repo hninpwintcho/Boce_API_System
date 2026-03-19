@@ -19,7 +19,7 @@ async def get_authorized_user(api_key: str = Security(api_key_header)):
 
     async with get_db_connection() as db:
         cursor = await db.execute(
-            "SELECT id, owner_name, daily_quota, used_today, is_active, webhook_url FROM api_keys WHERE key_secret = ?",
+            "SELECT id, tenant_id, name, daily_quota, used_today, status, webhook_url FROM api_keys WHERE key_secret = ?",
             (api_key,)
         )
         row = await cursor.fetchone()
@@ -28,18 +28,19 @@ async def get_authorized_user(api_key: str = Security(api_key_header)):
             logger.warning(f"Unauthorized access attempt with key: {api_key[:8]}...")
             raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Invalid API Key")
         
-        user_id, owner, quota, used, active, webhook = row
+        user_id, tenant_id, name, quota, used, status, webhook = row
         
-        if not active:
-            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="API Key is deactivated")
+        if status != 'active':
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=f"API Key is {status}")
             
         if used >= quota:
-            logger.error(f"Quota exceeded for {owner} ({used}/{quota})")
+            logger.error(f"Quota exceeded for {name} ({used}/{quota})")
             raise HTTPException(status_code=429, detail="Daily point quota exceeded. High-cost mistake prevented.")
 
         return {
             "id": user_id, 
-            "owner": owner, 
+            "tenant_id": tenant_id,
+            "owner": name, 
             "webhook_url": webhook,
             "quota": quota,
             "used": used
