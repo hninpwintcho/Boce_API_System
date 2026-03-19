@@ -5,58 +5,295 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Boce Unified Proxy | Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #a855f7;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+            --success: #22c55e;
+            --warning: #eab308;
+            --danger: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background: var(--bg);
+            background: radial-gradient(circle at top right, #1e1b4b, #0f172a);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .navbar {
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 600;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .header {
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            color: var(--text-dim);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+        }
+
+        .stat-card .label {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        .main-card {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .table-container {
+            margin-top: 1.5rem;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 1rem;
+            color: var(--text-dim);
+            font-weight: 400;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge-success { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+        .badge-warning { background: rgba(234, 179, 8, 0.2); color: var(--warning); }
+        .badge-processing { background: rgba(99, 102, 241, 0.2); color: var(--primary); }
+        .badge-danger { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .badge-priority { background: rgba(168, 85, 247, 0.2); color: var(--secondary); border: 1px solid var(--secondary); }
+
+        .btn {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: opacity 0.3s;
+        }
+
+        .btn:hover { opacity: 0.9; }
+
+        .system-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success);
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate {
+            animation: fadeIn 0.8s ease forwards;
+        }
+    </style>
 </head>
 <body>
-    <div class="glass-container">
-        <header>
-            <h1>Unified Detection Proxy</h1>
-            <div class="balance-card">
-                <span class="label">Current Balance</span>
-                <span id="balance-value">Loading...</span>
-            </div>
+    <nav class="navbar">
+        <div class="logo">BOCE PROXY AI</div>
+        <div class="system-status">
+            <span class="dot"></span>
+            System Operational
+        </div>
+    </nav>
+
+    <div class="container animate">
+        <header class="header">
+            <h1>Detection Insights</h1>
+            <p>High-precision availability and anomaly tracking system.</p>
         </header>
 
-        <section class="stats-grid">
+        <div class="stats-grid">
             <div class="stat-card">
-                <h3>Global Availability</h3>
-                <div class="value" id="global-avg">--%</div>
+                <div class="label">Total Tasks</div>
+                <div id="total-count" class="value">0</div>
             </div>
             <div class="stat-card">
-                <h3>Active Tasks</h3>
-                <div class="value" id="active-tasks">0</div>
+                <div class="label">Currently Processing</div>
+                <div id="processing-count" class="value">0</div>
             </div>
             <div class="stat-card">
-                <h3>Total Audited</h3>
-                <div class="value" id="total-audited">0</div>
+                <div class="label">Success Rate</div>
+                <div id="health-pct" class="value">0%</div>
             </div>
-        </section>
+            <div class="stat-card">
+                <div class="label">Quota Used</div>
+                <div id="quota-info" class="value">0 / 0</div>
+            </div>
+        </div>
 
-        <main>
-            <div class="controls">
-                <h2>Audit History (Traceability)</h2>
-                <button onclick="refreshData()" class="btn-refresh">Refresh Data</button>
+        <div class="main-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>Recent Task History</h2>
+                <button class="btn" onclick="fetchHistory()">Refresh</button>
             </div>
+            
             <div class="table-container">
-                <table id="history-table">
+                <table>
                     <thead>
                         <tr>
-                            <th>Task ID</th>
-                            <th>URL</th>
-                            <th>Provider</th>
+                            <th>ID</th>
+                            <th>Target URL</th>
+                            <th>Priority</th>
                             <th>Status</th>
+                            <th>Date</th>
                             <th>Availability</th>
-                            <th>Time</th>
                         </tr>
                     </thead>
                     <tbody id="history-body">
-                        <!-- Data injected here -->
+                        <!-- Loaded via JS -->
                     </tbody>
                 </table>
             </div>
-        </main>
+        </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script>
+        async function fetchHistory() {
+            try {
+                // 1. Fetch Key-Isolated Stats
+                const statsResp = await fetch('/api/stats/summary', { headers: {'X-API-KEY': 'sk-test-points-safe-12345'} });
+                const stats = await statsResp.json();
+                
+                document.getElementById('total-count').textContent = stats.metrics.total_tasks;
+                document.getElementById('processing-count').textContent = stats.metrics.processing || 0;
+                document.getElementById('health-pct').textContent = stats.metrics.success_rate_percent + '%';
+                document.getElementById('quota-info').textContent = `${Math.round(stats.quota.used_today)} / ${stats.quota.daily_limit}`;
+
+                // 2. Fetch History
+                const response = await fetch('/api/detect/history?limit=15', { headers: {'X-API-KEY': 'sk-test-points-safe-12345'} });
+                const data = await response.json();
+                const body = document.getElementById('history-body');
+                body.innerHTML = '';
+                
+                data.items.forEach(item => {
+                    const row = document.createElement('tr');
+                    let statusClass = 'badge-warning';
+                    if (item.status === 'completed') statusClass = 'badge-success';
+                    if (item.status === 'failed') statusClass = 'badge-danger';
+                    if (item.status === 'processing') statusClass = 'badge-processing';
+                    
+                    const availability = item.availability ? (item.availability + '%') : '--';
+                    const priorityValue = item.priority || 10;
+                    const priorityClass = priorityValue > 100 ? 'badge-priority' : '';
+                    
+                    row.innerHTML = `
+                        <td style="font-family: monospace; color: var(--text-dim)">${item.id.substring(0,8)}</td>
+                        <td>${item.url}</td>
+                        <td><span class="badge ${priorityClass}">${priorityValue}</span></td>
+                        <td><span class="badge ${statusClass}">${item.status.toUpperCase()}</span></td>
+                        <td style="font-size: 0.9rem; color: var(--text-dim)">${item.timestamp}</td>
+                        <td style="font-weight: 600">${availability}</td>
+                    `;
+                    body.appendChild(row);
+                });
+            } catch (err) {
+                console.error("Dashboard refresh failed:", err);
+            }
+        }
+
+        // Initial load
+        window.onload = fetchHistory;
+    </script>
 </body>
 </html>

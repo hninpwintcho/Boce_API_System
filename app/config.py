@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     # Boce API credentials
     BOCE_API_URL: str = "https://api.boce.com/v3"   # base URL (no trailing slash)
     BOCE_API_KEY: str = ""                            # leave empty → use mock
+    BOCE_FORCE_MOCK: bool = False                     # Force mock even if key exists
 
     # Which Boce node IDs to include in every detection task
     # Comma-separated string in .env, e.g.  BOCE_NODE_IDS=6,31,32,55

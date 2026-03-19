@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import get_db_connection
-from app.models.schemas import DetectRequest, ErrorResponse
+from app.models.schemas import DetectRequest, ErrorResponse, BatchDetectRequest
 from app.services import boce_client
 from app.services.validation_service import validate_detect_request
 from app.services.auth_service import get_authorized_user
@@ -20,10 +20,12 @@ from app.utils.errors import ValidationError
 logger = logging.getLogger(__name__)
 
 # ─── Helper: Balance Pre-Check ────────────────────────────────────────────────
-async def _check_balance_sufficient(cost_estimate: float = 1.0) -> dict:
+async def check_boce_balance(cost_estimate: float = 1.0) -> dict:
     """Boss Requirement: Check Boce balance BEFORE spending any points."""
     if not settings.BOCE_API_KEY:
         return {"sufficient": True, "balance": 999.99, "mock": True}
+    if settings.BOCE_FORCE_MOCK:
+        return {"sufficient": True, "balance": 9999, "mock": True}
     try:
         url = f"{settings.BOCE_API_URL}/balance"
         async with httpx.AsyncClient(timeout=10) as client:
@@ -35,12 +37,7 @@ async def _check_balance_sufficient(cost_estimate: float = 1.0) -> dict:
         logger.error(f"Balance pre-check failed: {e}")
         return {"sufficient": True, "balance": -1, "error": str(e)}
 
-# ─── Batch Request Model ──────────────────────────────────────────────────────
-class BatchDetectRequest(BaseModel):
-    urls: List[str]
-    ip_whitelist: Optional[List[str]] = None
-
-router = APIRouter(prefix="/api", tags=["detect"])
+router = APIRouter(tags=["detect"])
 
 @router.get("/balance", summary="Check Provider balance")
 async def get_balance(provider: str = "boce"):
@@ -63,101 +60,112 @@ async def get_balance(provider: str = "boce"):
     
     return JSONResponse(status_code=400, content={"success": False, "message": f"Provider {provider} not supported."})
 
-@router.post("/detect/batch", summary="Queue a batch of domains (Boss-level)")
-async def detect_batch(
-    req: BatchDetectRequest,
-    background_tasks: BackgroundTasks, 
-    provider: str = "boce",
+@router.post("/batch", summary="Queue high-volume batch (Commercial Grade)")
+async def create_batch_detect_tasks(
+    req: BatchDetectRequest, 
     user: dict = Depends(get_authorized_user)
 ) -> JSONResponse:
-    """
-    Boss-Level Batch Submission:
-    - Pre-checks balance before spending ANY points
-    - Creates a batch_id to track progress of ALL domains together
-    - Returns progress endpoint URL
-    """
-    urls = req.urls
-    
-    # 1. BALANCE PRE-CHECK (Boss Requirement #6)
-    balance_info = await _check_balance_sufficient(cost_estimate=len(urls))
-    if not balance_info["sufficient"]:
-        return JSONResponse(status_code=402, content={
-            "success": False,
-            "error": "INSUFFICIENT_BALANCE",
-            "message": f"Not enough Boce points. Need ~{len(urls)}, have {balance_info['balance']}.",
-            "balance": balance_info["balance"]
-        })
-    
-    # 2. CREATE BATCH ID (Boss Requirement #8: Track 100-5000 domains)
-    batch_id = f"batch-{uuid.uuid4().hex[:8]}"
-    task_ids = []
-    skipped = []
-    
-    async with get_db_connection() as db:
-        for url in urls:
+    try:
+        """
+        Business Level: Bulk insertion with chunking (2000 per write) 
+        to prevent API latency and lock issues during massive 5000+ domain batches.
+        """
+        # 1. Check points
+        cost_per_url = 1.0 
+        total_cost = len(req.urls) * cost_per_url
+        balance_info = await check_boce_balance(total_cost)
+        if not balance_info["sufficient"] or balance_info["balance"] < total_cost:
+            return JSONResponse(status_code=402, content={"success": False, "error": "INSUFFICIENT_BALANCE", "message": f"Need ~{total_cost}, have {balance_info['balance']}.", "balance": balance_info["balance"]})
+
+        batch_id = str(uuid.uuid4())
+        skipped = []
+        task_data = []
+
+        # 2. Prepare task rows
+        for url in req.urls:
+            url_str = str(url)
             try:
-                validate_detect_request(url, req.ip_whitelist)
+                validate_detect_request(url_str, req.ip_whitelist)
             except ValidationError as e:
-                skipped.append({"url": url, "reason": str(e)})
+                skipped.append({"url": url_str, "reason": str(e)})
                 continue
-
-            task_id = str(uuid.uuid4())
-            await db.execute(
-                "INSERT INTO detection_tasks (id, url, status, provider, api_key_id, error_code) VALUES (?, ?, 'pending', ?, ?, ?)",
-                (task_id, str(url), provider, user["id"], batch_id)
-            )
-            await db.execute("UPDATE api_keys SET used_today = used_today + 1 WHERE id = ?", (user["id"],))
             
-            task_ids.append(task_id)
-            background_tasks.add_task(run_detection_bg, task_id, str(url), provider=provider, batch_id=batch_id)
-        await db.commit()
+            task_id = str(uuid.uuid4())
+            # Priority: Task-level if provided, else batch-level
+            priority = req.priority or 10
+            # Webhook: Task-level override, else user-level default
+            webhook = req.webhook_url or user.get("webhook_url")
+            
+            task_data.append((
+                task_id, url_str, req.provider, 'pending', user["id"], batch_id, priority, webhook
+            ))
 
-    return JSONResponse(
-        status_code=202,
-        content={
-            "success": True, 
-            "batch_id": batch_id,
-            "total_queued": len(task_ids), 
-            "total_skipped": len(skipped),
-            "skipped": skipped,
-            "task_ids": task_ids, 
-            "user": user["owner"],
-            "balance_before": balance_info["balance"],
-            "progress_url": f"/api/batch/{batch_id}/progress"
-        }
-    )
+        # 3. Bulk Write with Chunking (A11 requirement)
+        CHUNK_SIZE = 2000
+        async with get_db_connection() as db:
+            for i in range(0, len(task_data), CHUNK_SIZE):
+                chunk = task_data[i:i + CHUNK_SIZE]
+                await db.executemany(
+                    "INSERT INTO detection_tasks (id, url, provider, status, api_key_id, error_code, priority, webhook_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    chunk
+                )
+            # Update API key usage count
+            await db.execute("UPDATE api_keys SET used_today = used_today + ? WHERE id = ?", (len(task_data), user["id"]))
+            await db.commit()
 
-@router.get("/batch/{batch_id}/progress", summary="Track batch progress (Boss-level)")
-async def get_batch_progress(batch_id: str):
-    """Boss Requirement: How to track 100-5000 domains?"""
+        return JSONResponse(
+            status_code=202,
+            content={
+                "success": True, 
+                "batch_id": batch_id,
+                "total_queued": len(task_data), 
+                "total_skipped": len(skipped),
+                "skipped": skipped,
+                "user": user["owner"],
+                "balance_before": balance_info["balance"],
+                "progress_url": f"/api/detect/batch/{batch_id}/progress"
+            }
+        )
+    except Exception as e:
+        logger.error(f"FATAL BATCH ERROR: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"success": False, "error": "INTERNAL_ERROR"})
+
+@router.get("/batch/{batch_id}/progress", summary="Track batch progress (Senior Level)")
+async def get_batch_progress(batch_id: str, user: dict = Depends(get_authorized_user)):
+    """
+    Boss Requirement: Track progress of 5000 domains.
+    Senior Level: Show queue counts and processing status with priority awareness.
+    """
     async with get_db_connection() as db:
         cursor = await db.execute(
-            "SELECT id, url, status, global_availability_percent FROM detection_tasks WHERE error_code = ?",
-            (batch_id,)
+            "SELECT id, url, status, global_availability_percent FROM detection_tasks WHERE error_code = ? AND api_key_id = ?",
+            (batch_id, user["id"])
         )
         rows = await cursor.fetchall()
         if not rows:
-            return JSONResponse(status_code=404, content={"error": "Batch not found"})
+            return JSONResponse(status_code=404, content={"message": "Batch not found or unauthorized"})
         
-        total = len(rows)
-        completed = sum(1 for r in rows if r[2] == "completed")
-        failed = sum(1 for r in rows if r[2] == "failed")
-        pending = total - completed - failed
+        results = [dict(zip(["id", "url", "status", "availability"], r)) for r in rows]
         
-        progress_percent = round((completed + failed) / total * 100, 1) if total > 0 else 0
+        total = len(results)
+        completed = sum(1 for r in results if r["status"] == "completed")
+        failed = sum(1 for r in results if r["status"] == "failed")
+        processing = sum(1 for r in results if r["status"] == "processing")
+        pending = total - completed - failed - processing
         
         return {
             "batch_id": batch_id,
-            "total": total,
-            "completed": completed,
-            "failed": failed,
-            "pending": pending,
-            "progress_percent": progress_percent,
-            "is_done": pending == 0,
-            "tasks": [
-                {"id": r[0], "url": r[1], "status": r[2], "availability": r[3]} for r in rows
-            ]
+            "summary": {
+                "total": total,
+                "completed": completed,
+                "failed": failed,
+                "processing": processing,
+                "pending_in_priority_queue": pending,
+                "progress_percent": round((completed + failed) / total * 100, 2) if total > 0 else 0
+            },
+            "tasks_snapshot": results[:100]
         }
+
 
 @router.post(
     "/detect",
@@ -169,64 +177,87 @@ async def detect(
     background_tasks: BackgroundTasks, 
     user: dict = Depends(get_authorized_user)
 ) -> JSONResponse:
-    """Async entry point for single domain detection."""
+    """Queue a single task with hierarchical webhook support."""
     validate_detect_request(req.url, req.ip_whitelist)
     
-    # BALANCE PRE-CHECK (Boss Requirement #6)
-    balance_info = await _check_balance_sufficient(cost_estimate=1.0)
+    # 1. Check points
+    balance_info = await check_boce_balance()
     if not balance_info["sufficient"]:
-        return JSONResponse(status_code=402, content={
-            "success": False,
-            "error": "INSUFFICIENT_BALANCE",
-            "message": f"Not enough Boce points. Balance: {balance_info['balance']}",
-            "balance": balance_info["balance"]
-        })
+         return JSONResponse(status_code=400, content={"success": False, "error": "INSUFFICIENT_BALANCE", "message": "Not enough Boce points. Balance: 0", "balance": 0})
     
     task_id = str(uuid.uuid4())
+    # Webhook: Task-level override, else user-level default
+    webhook = req.webhook_url or user.get("webhook_url")
+
     # Phase 4: Auto-Decision (Failover Logic)
     target_provider = provider_manager.get_best_provider()
     
     async with get_db_connection() as db:
         await db.execute(
-            "INSERT INTO detection_tasks (id, url, status, provider, api_key_id) VALUES (?, ?, 'pending', ?, ?)",
-            (task_id, str(req.url), target_provider, user["id"])
+            "INSERT INTO detection_tasks (id, url, status, provider, api_key_id, priority, webhook_url) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (task_id, str(req.url), 'pending', target_provider, user["id"], req.priority, webhook)
         )
         await db.execute("UPDATE api_keys SET used_today = used_today + 1 WHERE id = ?", (user["id"],))
         await db.commit()
 
-    # Start Background Task
-    background_tasks.add_task(run_detection_bg, task_id, str(req.url), req.ip_whitelist, provider=target_provider)
+    # The centralized Scheduler Loop handles all 'pending' tasks
+    # background_tasks.add_task(run_detection_bg, task_id, str(req.url), req.ip_whitelist, provider=target_provider)
     
     return JSONResponse(
         status_code=202,
         content={
-            "success": True, 
-            "task_id": task_id, 
-            "message": "Detection queued.",
-            "user": user["owner"],
             "balance_remaining": balance_info["balance"]
         }
     )
 
-@router.get("/history", summary="View auditable task history")
-async def get_history(limit: int = 50, offset: int = 0):
+@router.get("/detect/history", summary="View auditable task history with URL filter")
+@router.get("/history", include_in_schema=False)
+async def get_history(
+    url: Optional[str] = None, 
+    limit: int = 50, 
+    offset: int = 0,
+    user: dict = Depends(get_authorized_user)
+):
+    """
+    Boss Requirement: List stored results for a URL, newest first.
+    Isolation: Strictly filtered by the requesting API key.
+    """
     async with get_db_connection() as db:
-        cursor = await db.execute(
-            "SELECT id, url, provider, status, created_at FROM detection_tasks ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            (limit, offset)
-        )
+        if url:
+            cursor = await db.execute(
+                "SELECT id, url, provider, status, created_at, global_availability_percent FROM detection_tasks WHERE url = ? AND api_key_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (url, user["id"], limit, offset)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT id, url, provider, status, created_at, global_availability_percent FROM detection_tasks WHERE api_key_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (user["id"], limit, offset)
+            )
         task_rows = await cursor.fetchall()
         
         return {
-            "items": [{"id": r[0], "url": r[1], "provider": r[2], "status": r[3], "timestamp": r[4]} for r in task_rows]
+            "items": [
+                {
+                    "id": r[0], 
+                    "url": r[1], 
+                    "provider": r[2], 
+                    "status": r[3], 
+                    "timestamp": r[4],
+                    "availability": r[5]
+                } for r in task_rows
+            ],
+            "limit": limit,
+            "offset": offset,
+            "url_filter": url
         }
 
 @router.get("/detect/{task_id}", summary="Get task status and result")
-async def get_task_status(task_id: str):
+async def get_task_status(task_id: str, user: dict = Depends(get_authorized_user)):
+    """Isolated status retrieval."""
     async with get_db_connection() as db:
-        cursor = await db.execute("SELECT * FROM detection_tasks WHERE id = ?", (task_id,))
+        cursor = await db.execute("SELECT * FROM detection_tasks WHERE id = ? AND api_key_id = ?", (task_id, user["id"]))
         task_row = await cursor.fetchone()
-        if not task_row: return JSONResponse(status_code=404, content={"message": "Not found"})
+        if not task_row: return JSONResponse(status_code=404, content={"message": "Task not found or unauthorized"})
 
         cols = [d[0] for d in cursor.description]
         task = dict(zip(cols, task_row))

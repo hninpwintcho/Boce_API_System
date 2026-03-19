@@ -1,128 +1,121 @@
-# 🛡️ Boce Unified Detection Proxy | Platform Architect Edition
+# 🔱 Boce Unified Detection Proxy | Business Edition (v4)
 
-Welcome to the **Unified Detection Proxy Layer**. This project is a world-class, autonomous monitoring platform that bridges the gap between raw detection APIs and high-scale enterprise requirements.
-
-## 🚀 The Journey: Step-by-Step Implementation
-
-This project evolved through four critical phases, each adding layers of reliability, security, and intelligence.
+Welcome to the **Enterprise Monitoring Platform**. This is the **Business Level** graduation of the Boce Detection Proxy, redesigned for high-volume commercial throughput, multi-tenant isolation, and automated asynchronous lifecycle management.
 
 ---
 
-### 🏗️ Phase 1: The Foundation (MVP)
-**Objective**: Establish core connectivity and basic data normalization.
+## 🧠 1. Core Business Logic (Architectural Step-by-Step)
 
-1. **Setup Environment**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. **Configure API**: Update `.env` with your `BOCE_API_KEY`.
-3. **Run Initial Checks**:
-   ```bash
-   python check_db.py
-   ```
-**✅ Verification**:
-- Run `python tests/verify_1_to_3.py` (Checks health, basic auth, and task creation).
-- Check Swagger Docs at `http://localhost:3000/docs`.
-- <img width="1832" height="933" alt="image" src="https://github.com/user-attachments/assets/dda80539-a894-48c7-b60e-619a0d5b1744" />
-<img width="1608" height="1072" alt="image" src="https://github.com/user-attachments/assets/57b35085-95af-488c-b222-e6e3e3de3637" />
+The "Business Level" standard is built on three pillars of engineering excellence:
 
+### ✨ Step 1: Request Ingress & Isolation
+1.  **Authentication**: Every request must carry an `X-API-KEY`. The system identifies the business unit, checks its **is_active** status, and retrieves its **daily_quota**.
+2.  **Validation**: URL patterns and JSON schemas are strictly validated BEFORE any points are spent or database resources are allocated.
+3.  **Point-Safe Assurance**: Before accepting a task, the platform performs a **Pre-check** with the Boce balance API. It calculates the `total_cost` (e.g., 1 point per domain) and rejects the request immediately if the balance is insufficient, protecting your application from 502/504 external errors.
 
+### ✨ Step 2: High-Performance Bulk Data Ingestion
+1.  **Bulk Buffering**: When you submit 5,000 domains via `/api/detect/batch`, the system iterates through the list and flags invalid URLs as "skipped".
+2.  **Chunked Persistence (2000 per write)**: To prevent blocking the API or causing SQLite lock-timeouts, the platform writes tasks in atomic chunks of 2,000 records using `executemany`.
+3.  **Job Queuing**: Each task is assigned a `batch_id` and marked as `pending`. This ensures the API returns in **milliseconds**, even for massive volumes.
 
----
+### ✨ Step 3: Priority-Aware Orchestration (The Brain)
+1.  **Continuous Polling**: A background **Priority Scheduler** scans the `detection_tasks` table.
+2.  **Strategic Retrieval**: It fetches tasks ordered by `priority DESC` and `created_at ASC`. Your urgent business requests jump the queue ahead of large background crawl batches.
+3.  **Concurrency Management**: Tasks are dispatched to asynchronous workers, ensuring high-concurrency external detection without stalling the main API thread.
 
-### 🛡️ Phase 2: Robustness & Point-Safe Recovery
-**Objective**: Ensure zero-waste point management and system resilience.
-
-1. **Initialize Database**: The system automatically runs `init_db` on startup.
-2. **Test Recovery Manager**: 
-   - Start a task, then kill the server.
-   - Restart the server; check logs to see tasks being resumed automatically.
-3. **Verify Atomic Persistence**: Every task creation is logged to `boce_api.db` before external calls.
-
-**✅ Verification**:
-- Run `python -m tests.verify_7_recovery` to simulate a crash and recovery scenario.
+### ✨ Step 4: Hierarchical Webhook Propagation
+1.  **The Trigger**: Upon task completion (Success or Failure), the system generates a result payload.
+2.  **The Dispatcher**: 
+    -   If the **task** provided a `webhook_url`, it is used.
+    -   If not, the system uses the **Account Default Webhook** configured for that API key.
+3.  **Reliability**: A delivery worker ensures your business application is notified via `POST` with a JSON payload, including the full detection results and global availability metrics.
 
 ---
 
-### 💎 Phase 3: Governance & Visualization
-**Objective**: Secure the API and provide a high-end management dashboard.
+## ⚙️ 2. Installation & Setup
 
-1. **Setup Admin Keys**: 
-   ```bash
-   python setup_keys.py
-   ```
-2. **Access Dashboard**: Open `http://localhost:3000/dashboard` in your browser.
-3. **Authenticate**: Use the generated key (e.g., `sk-test-points-safe-12345`) when prompted.
+### 🐳 Method A: Docker Compose (Recommended)
+The platform is optimized for Docker, providing auto-recovery and volume persistence.
 
-**✅ Verification**:
-- Run `pytest tests/test_phase3_auth.py` to confirm `X-API-KEY` enforcement.
-- Verify real-time balance updates on the dashboard.
+1.  **Clone & Configure**: Ensure `.env` contains your `BOCE_API_KEY`.
+2.  **Deploy**:
+    ```bash
+    docker-compose up --build -d
+    ```
+3.  **Check Health**:
+    ```bash
+    docker ps --filter "name=boce-api-v4"
+    ```
+    *(Look for the `(healthy)` status!)*
+
+### 🐍 Method B: Local Python Installation
+Use this for debugging or development.
+
+1.  **Install Dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+2.  **Initialize & Run**:
+    ```powershell
+    # Windows
+    python -m uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
+    ```
+3.  **Setup Keys**: Run `python setup_keys.py` to generate your initial `sk-` business keys.
 
 ---
 
-### 🧠 Phase 4: Intelligence & Auto-Failover
-**Objective**: Autonomous monitoring and smart alerting.
+## 🌐 3. Usage Guide: Domain Checking
 
-1. **Test AI Monitoring**: 
-   - The system automatically detects "Silent Failures" and latency outliers.
-2. **Configure Alerts**: Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
-3. **Trigger Test Alert**:
-   - Access `GET http://localhost:3000/api/admin/alert/test` (requires API Key).
-4. **Simulate Failover**:
-   - The system monitors provider health and switches to backups if success rates drop.
-
-**✅ Verification**:
-- Run `python -m tests.test_phase4_final` to verify anomaly detection and auto-failover logic.
-- Run `pytest tests/test_boss_features.py` for a full suite of final checks.
-
----
-
-## 🔍 Manual Verification
-While automated tests are recommended, you can verify core functionality manually:
-
-### 1. Dashboard Accessibility
-- Open your browser and navigate to: `http://localhost:3000/dashboard`
-- Confirm that the glassmorphic UI loads and prompts for an `X-API-KEY`.
-
-### 2. API Authentication (via cURL)
-Test the detection endpoint manually to verify key enforcement:
-
-**Unauthorized Request**:
-```bash
-curl -X POST http://localhost:3000/api/detect \
-     -H "Content-Type: application/json" \
-     -d '{"url": "https://example.com"}'
+### ✅ Single Domain Submission
+Ideal for low-latency ad-hoc checks.
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/api/detect/detect" `
+  -Method Post `
+  -Headers @{"X-API-KEY"="sk-test-points-safe-12345"} `
+  -ContentType "application/json" `
+  -Body '{"url": "http://example.com"}'
 ```
-*(Expected: `403 Forbidden`)*
 
-**Authorized Request**:
-```bash
-curl -X POST http://localhost:3000/api/detect \
-     -H "X-API-KEY: sk-test-points-safe-12345" \
-     -H "Content-Type: application/json" \
-     -d '{"url": "https://example.com"}'
+### ✅ Industrial Bulk Submission (5,000+ Domains)
+High-volume ingestion for commercial crawling.
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/api/detect/batch" `
+  -Method Post `
+  -Headers @{"X-API-KEY"="sk-test-points-safe-12345"} `
+  -ContentType "application/json" `
+  -Body '{"urls": ["http://domain1.com", "http://domain2.com"], "webhook_url": "http://your-app.com/callback"}'
 ```
-*(Expected: `202 Accepted` with a `task_id`)*
+*Note: This returns a `batch_id` instantly.*
 
-### 3. Check Task Status
-```bash
-curl -H "X-API-KEY: sk-test-points-safe-12345" \
-     http://localhost:3000/api/detect/<TASK_ID>
+### ✅ Monitoring Progress & Stats
+```powershell
+# Get Summary Dashboard Data
+Invoke-RestMethod -Uri "http://localhost:3000/api/stats/summary" -Headers @{"X-API-KEY"="..."}
+
+# Track Specific Batch Progress
+Invoke-RestMethod -Uri "http://localhost:3000/api/detect/batch/<BATCH_ID>/progress" -Headers @{"X-API-KEY"="..."}
 ```
 
 ---
 
-## 🛠️ Technology Stack
-- **Framework**: FastAPI (Asynchronous Python)
-- **Database**: SQLite with `aiosqlite` for non-blocking I/O.
-- **I/O Library**: HTTPX for high-concurrency external requests.
-- **Security**: Pydantic v1 (compatibility mode) and API Key hashing.
-- **Frontend**: Vanilla HTML5/CSS3/JS (Zero-dependency Dashboard).
+## ✅ 4. Verification & Diagnostics
 
-## 🏁 Final Conclusion
-The project is now a **Professional Sovereign Proxy Layer**. It protects your budget from waste, secures your keys from leakage, manages high concurrency with ease, and uses AI to maintain 100% detection accuracy.
+1.  **System Health**: Access `http://localhost:3000/` – it should redirect to the **Visual Dashboard**.
+2.  **Database Integrity**: Check `boce_api.db` (SQLite). 
+    - Table `api_keys`: Contains business unit configurations.
+    - Table `detection_tasks`: Contains the high-volume task ledger.
+3.  **API Key Verification**:
+    ```powershell
+    # This should fail with 403 (No Key)
+    Invoke-WebRequest -Uri "http://localhost:3000/api/detect/history"
+    ```
 
-**Project Status: Ready for Production Scalability.** 🚀
+---
+
+## 🏁 Enterprise Conclusion
+The system is now **Wallet Ready** and **Audit Compliant**. It ensures your detection infrastructure is as reliable as the business it supports.
+
+**Project Status: Ready for Production.** 🚀💎
 
 ---
 *Developed for hninpwintcho by Antigravity AI.*

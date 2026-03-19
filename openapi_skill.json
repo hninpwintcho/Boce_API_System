@@ -6,14 +6,35 @@
     "version": "1.0.0"
   },
   "paths": {
-    "/api/balance": {
+    "/health": {
       "get": {
         "tags": [
+          "system"
+        ],
+        "summary": "Health Check",
+        "description": "Liveness & Readiness probe for professional deployments.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/detect/balance": {
+      "get": {
+        "tags": [
+          "Detection",
           "detect"
         ],
         "summary": "Check Provider balance",
         "description": "Check balance for a specific provider. Default is Boce.",
-        "operationId": "get_balance_api_balance_get",
+        "operationId": "get_balance_api_detect_balance_get",
         "parameters": [
           {
             "required": false,
@@ -51,32 +72,16 @@
     "/api/detect/batch": {
       "post": {
         "tags": [
+          "Detection",
           "detect"
         ],
-        "summary": "Queue multiple detection tasks",
-        "description": "Submit multiple URLs. Auditable and Traceable.",
-        "operationId": "detect_batch_api_detect_batch_post",
-        "parameters": [
-          {
-            "required": false,
-            "schema": {
-              "type": "string",
-              "title": "Provider",
-              "default": "boce"
-            },
-            "name": "provider",
-            "in": "query"
-          }
-        ],
+        "summary": "Queue high-volume batch (Commercial Grade)",
+        "operationId": "create_batch_detect_tasks_api_detect_batch_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array",
-                "title": "Urls"
+                "$ref": "#/components/schemas/BatchDetectRequest"
               }
             }
           },
@@ -109,14 +114,62 @@
         ]
       }
     },
-    "/api/detect": {
+    "/api/detect/batch/{batch_id}/progress": {
+      "get": {
+        "tags": [
+          "Detection",
+          "detect"
+        ],
+        "summary": "Track batch progress (Senior Level)",
+        "description": "Boss Requirement: Track progress of 5000 domains.\nSenior Level: Show queue counts and processing status with priority awareness.",
+        "operationId": "get_batch_progress_api_detect_batch__batch_id__progress_get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            },
+            "name": "batch_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/detect/detect": {
       "post": {
         "tags": [
+          "Detection",
           "detect"
         ],
         "summary": "Queue a single detection task",
-        "description": "Async entry point for single domain detection.",
-        "operationId": "detect_api_detect_post",
+        "description": "Queue a single task with hierarchical webhook support.",
+        "operationId": "detect_api_detect_detect_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -174,14 +227,25 @@
         ]
       }
     },
-    "/api/history": {
+    "/api/detect/detect/history": {
       "get": {
         "tags": [
+          "Detection",
           "detect"
         ],
-        "summary": "View auditable task history",
-        "operationId": "get_history_api_history_get",
+        "summary": "View auditable task history with URL filter",
+        "description": "Boss Requirement: List stored results for a URL, newest first.\nIsolation: Strictly filtered by the requesting API key.",
+        "operationId": "get_history_api_detect_detect_history_get",
         "parameters": [
+          {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Url"
+            },
+            "name": "url",
+            "in": "query"
+          },
           {
             "required": false,
             "schema": {
@@ -222,16 +286,23 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
-    "/api/detect/{task_id}": {
+    "/api/detect/detect/{task_id}": {
       "get": {
         "tags": [
+          "Detection",
           "detect"
         ],
         "summary": "Get task status and result",
-        "operationId": "get_task_status_api_detect__task_id__get",
+        "description": "Isolated status retrieval.",
+        "operationId": "get_task_status_api_detect_detect__task_id__get",
         "parameters": [
           {
             "required": true,
@@ -262,16 +333,22 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
-    "/api/admin/keys": {
+    "/api/admin/api/admin/keys": {
       "get": {
         "tags": [
+          "Admin",
           "admin"
         ],
         "summary": "List Keys",
-        "operationId": "list_keys_api_admin_keys_get",
+        "operationId": "list_keys_api_admin_api_admin_keys_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -285,11 +362,12 @@
       },
       "post": {
         "tags": [
+          "Admin",
           "admin"
         ],
         "summary": "Create Api Key",
         "description": "Admin endpoint to issue new API Keys.\nIn a real system, this would itself be protected by a super-admin password.",
-        "operationId": "create_api_key_api_admin_keys_post",
+        "operationId": "create_api_key_api_admin_api_admin_keys_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -321,10 +399,203 @@
           }
         }
       }
+    },
+    "/api/admin/api/admin/keys/{key_id}": {
+      "delete": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Revoke Api Key",
+        "description": "Business isolation: Destroy a key.",
+        "operationId": "revoke_api_key_api_admin_api_admin_keys__key_id__delete",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key Id"
+            },
+            "name": "key_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Update Api Key",
+        "description": "Business isolation: Lifecycle management.",
+        "operationId": "update_api_key_api_admin_api_admin_keys__key_id__patch",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key Id"
+            },
+            "name": "key_id",
+            "in": "path"
+          },
+          {
+            "required": false,
+            "schema": {
+              "type": "number",
+              "title": "Daily Quota"
+            },
+            "name": "daily_quota",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "title": "Is Active"
+            },
+            "name": "is_active",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Webhook Url"
+            },
+            "name": "webhook_url",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats/api/detect/stats": {
+      "get": {
+        "tags": [
+          "Stats",
+          "stats"
+        ],
+        "summary": "Get user-specific detection stats",
+        "description": "Boss Requirement: Efficient summary query instead of alerting.\nReturns aggregated metrics for the current business key.",
+        "operationId": "get_user_stats_api_stats_api_detect_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/stats/api/admin/stats": {
+      "get": {
+        "tags": [
+          "Stats",
+          "stats"
+        ],
+        "summary": "Get global system stats (Admin only)",
+        "description": "Global oversight for platform admins.",
+        "operationId": "get_global_stats_api_stats_api_admin_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "BatchDetectRequest": {
+        "properties": {
+          "urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Urls"
+          },
+          "ip_whitelist": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ip Whitelist"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "default": "boce"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority",
+            "default": 10
+          },
+          "webhook_url": {
+            "type": "string",
+            "title": "Webhook Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "urls"
+        ],
+        "title": "BatchDetectRequest"
+      },
       "DetectRequest": {
         "properties": {
           "url": {
@@ -340,6 +611,15 @@
             },
             "type": "array",
             "title": "Ip Whitelist"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority",
+            "default": 10
+          },
+          "webhook_url": {
+            "type": "string",
+            "title": "Webhook Url"
           }
         },
         "type": "object",
@@ -394,6 +674,10 @@
             "type": "number",
             "title": "Daily Quota",
             "default": 100.0
+          },
+          "webhook_url": {
+            "type": "string",
+            "title": "Webhook Url"
           }
         },
         "type": "object",

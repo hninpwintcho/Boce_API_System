@@ -16,6 +16,7 @@ async def init_db():
                 daily_quota REAL DEFAULT 100.0,
                 used_today REAL DEFAULT 0.0,
                 is_active BOOLEAN DEFAULT 1,
+                webhook_url TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -28,6 +29,7 @@ async def init_db():
                 provider TEXT DEFAULT 'boce',
                 provider_task_id TEXT,
                 status TEXT NOT NULL,
+                priority INTEGER DEFAULT 10,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 completed_at TIMESTAMP,
                 regions_checked INTEGER DEFAULT 0,
@@ -36,9 +38,11 @@ async def init_db():
                 anomaly_count INTEGER DEFAULT 0,
                 error_code TEXT,
                 error_message TEXT,
+                webhook_url TEXT,
                 FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
             )
         """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_priority_created ON detection_tasks (status, priority DESC, created_at ASC)")
         
         await db.execute("""
             CREATE TABLE IF NOT EXISTS region_results (

@@ -76,6 +76,17 @@ class DetectionResult(BaseModel):
 class DetectRequest(BaseModel):
     url: AnyHttpUrl
     ip_whitelist: Optional[List[str]] = None
+    priority: int = 10
+    webhook_url: Optional[str] = None
+
+
+
+class BatchDetectRequest(BaseModel):
+    urls: List[str]
+    ip_whitelist: Optional[List[str]] = None
+    provider: str = "boce"
+    priority: int = 10
+    webhook_url: Optional[str] = None
 
 
 class ErrorResponse(BaseModel):
