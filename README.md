@@ -119,3 +119,107 @@ The system is now **Wallet Ready** and **Audit Compliant**. It ensures your dete
 
 ---
 *Developed for hninpwintcho by Antigravity AI.*
+
+
+
+This is another project "Your Project: boce-aggregated-api-system
+What is the project?
+This is a Node.js + TypeScript backend API that your boss ordered built. Its purpose:
+
+Wrapper/aggregator around Boce.com — a Chinese website monitoring service. It tests websites from multiple locations in China (DNS, speed, HTTP status, etc.) and gives you a unified, standardized result.
+
+Think of it like a quality inspector: you ask "Is www.baidu.com healthy from China?" — it sends probes from 许多 nodes (Node 31 = Fujian, Node 32 = elsewhere), collects results, calculates availability rates, detects anomalies, and returns clean JSON.
+
+📂 Project Architecture
+boce-aggregated-api-system/
+├── src/
+│   ├── app.ts              ← Express app setup
+│   ├── index.ts            ← Start HTTP server (port 3000)
+│   ├── config/             ← Env variables (API keys, ports, etc.)
+│   ├── middleware/         ← Rate limiting (30 req/min)
+│   ├── routes/             ← HTTP endpoints (/api/detect, /health)
+│   ├── services/
+│   │   ├── boce/           ← Calls Boce.com API (create task, poll result)
+│   │   ├── detection/      ← Normalizes + calculates metrics + anomalies
+│   │   ├── queue/          ← BullMQ + Redis (async job queue)
+│   │   └── db/             ← Postgres (saves detection history)
+│   ├── types/              ← TypeScript type definitions
+│   └── mcp/
+│       └── server.ts       ← 🤖 MCP server (explained below!)
+├── Dockerfile              ← Container for production
+├── docker-compose.yml      ← Runs app + Redis + Postgres together
+└── package.json
+🔄 How a Request Flows
+Your Client (curl/app)
+       │
+       ▼
+POST /api/detect  ──→  Boce.com API (create task)
+                           │
+                       poll every 10s (max 2min)
+                           │
+                       get results from nodes
+                           │
+                  normalize → metrics → anomaly detection
+                           │
+                      save to Postgres
+                           │
+                  return JSON response to you
+🤖 MCP Server — What is it?
+MCP = Model Context Protocol
+
+This is the most modern and exciting part of your project! Let me explain it step by step.
+
+🧠 The Problem MCP Solves
+Normally, an AI like Claude or ChatGPT only knows what you type to it. It cannot call your APIs or run code on its own. So if you ask it "Is www.baidu.com healthy right now?" — it would say "I don't know, I can't check."
+
+MCP fixes this. It gives AI assistants a standardized way to call your backend tools.
+
+📡 How MCP Works (Simple Analogy)
+Without MCP:
+   You → AI Chat → "I don't know, can't check"
+With MCP:
+   You → AI Chat → [AI calls your MCP Server] → Your API → Real Data → AI answers!
+Think of MCP as a waiter between your AI assistant and your backend kitchen.
+
+🛠️ Your MCP Server Has 4 Tools
+Tool	What it does
+certificate_summary	Checks if a website's SSL certificate is valid/expiring
+boce_probe_summary	Probes a domain from Chinese nodes via Boce.com
+investigate_domain	Combines cert + probe into one full investigation report
+investigate_domains_batch	Investigates up to 20 domains at once (parallel)
+💻 Your MCP Server Has 2 Modes
+Mode	Command	Use case
+stdio	npm run mcp:start:stdio	Local debug in Cursor IDE
+HTTP	npm run mcp:start	Remote AI clients connect via http://localhost:3010/mcp
+🔌 Practical Example: Cursor IDE Integration
+Your .cursor/mcp.json config (already in your project!) lets Cursor IDE automatically use these tools. You can type in Cursor chat:
+
+Call MCP tool investigate_domain with {"domain":"www.baidu.com","nodeIds":"31,32"}
+And Cursor will call your 
+
+src/mcp/server.ts
+, which calls Boce.com, and return a real result like:
+
+domain: www.baidu.com
+final_status: HEALTHY
+availability_rate: 1.0
+certificate_ok: true
+days_remaining: 142
+🗺️ Technology Stack Summary
+Technology	Role
+TypeScript/Node.js	Main language + runtime
+Express.js	HTTP web server
+Redis + BullMQ	Async job queue (don't block while waiting for Boce)
+PostgreSQL	Store detection history
+Docker Compose	Run everything together easily
+@modelcontextprotocol/sdk	The MCP library — lets AI agents use your tools
+Zod	Validate inputs (type-safe)
+🎯 Summary (Boss's Vision)
+Your boss built a system where:
+
+Any client can call /api/detect to check website health from China
+Async queue handles bulk jobs without timeouts
+Postgres stores history so you can track health over time
+MCP server lets AI agents (Claude, Cursor, etc.) automatically investigate domains by calling your tools — making the system "AI-agent ready"
+This is a commercial-grade platform — it has auth, rate limiting, webhooks, pagination, and AI integration all in one project. Very impressive boss requirements! 🎉
+
